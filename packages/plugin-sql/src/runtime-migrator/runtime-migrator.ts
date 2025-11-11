@@ -15,6 +15,11 @@ import {
 import { deriveSchemaName } from './schema-transformer';
 import { DatabaseIntrospector } from './drizzle-adapters/database-introspector';
 import { createHash } from 'crypto';
+import {
+  ensureMigrationsNamespace,
+  isMigrationsMetadataDisabled,
+  migrationTableSQL,
+} from './storage/migrations-namespace';
 
 export class RuntimeMigrator {
   private migrationTracker: MigrationTracker;
@@ -71,7 +76,17 @@ export class RuntimeMigrator {
     // Create all non-public schemas
     for (const schemaName of schemasToCreate) {
       logger.debug(`[RuntimeMigrator] Ensuring schema '${schemaName}' exists`);
-      await this.db.execute(sql.raw(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`));
+      try {
+        await this.db.execute(sql.raw(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`));
+      } catch (error) {
+        logger.warn(
+          {
+            error: error instanceof Error ? error.message : String(error),
+            schema: schemaName,
+          },
+          '[RuntimeMigrator] Schema creation failed; continuing without dedicated schema (dialect may not support schemas)'
+        );
+      }
     }
   }
 
@@ -429,7 +444,11 @@ export class RuntimeMigrator {
   async initialize(): Promise<void> {
     logger.info('[RuntimeMigrator] Initializing migration system...');
     await this.migrationTracker.ensureTables();
-    logger.info('[RuntimeMigrator] Migration system initialized');
+    if (isMigrationsMetadataDisabled()) {
+      logger.warn('[RuntimeMigrator] Runtime migration tracking disabled; metadata tables unavailable');
+    } else {
+      logger.info('[RuntimeMigrator] Migration system initialized');
+    }
   }
 
   /**
@@ -458,6 +477,12 @@ export class RuntimeMigrator {
 
       // Ensure migration tables exist
       await this.initialize();
+      if (isMigrationsMetadataDisabled()) {
+        logger.info(
+          `[RuntimeMigrator] Skipping runtime migration for ${pluginName} because metadata storage is disabled for this dialect`
+        );
+        return;
+      }
 
       // Only use advisory locks for real PostgreSQL databases
       // Skip for PGLite or development databases
@@ -734,6 +759,9 @@ export class RuntimeMigrator {
     hash: string,
     sqlStatements: string[]
   ): Promise<void> {
+    if (isMigrationsMetadataDisabled()) {
+      return;
+    }
     let transactionStarted = false;
 
     try {
@@ -744,7 +772,23 @@ export class RuntimeMigrator {
       // Execute all SQL statements
       for (const stmt of sqlStatements) {
         logger.debug(`[RuntimeMigrator] Executing: ${stmt}`);
-        await this.db.execute(sql.raw(stmt));
+        const normalized = stmt.trim().toUpperCase();
+        const isSchemaStatement = normalized.startsWith('CREATE SCHEMA');
+        try {
+          await this.db.execute(sql.raw(stmt));
+        } catch (error) {
+          if (isSchemaStatement) {
+            logger.warn(
+              {
+                error: error instanceof Error ? error.message : String(error),
+                statement: stmt,
+              },
+              '[RuntimeMigrator] Skipping schema statement because the current dialect does not support CREATE SCHEMA'
+            );
+            continue;
+          }
+          throw error;
+        }
       }
 
       // Get next index for journal
@@ -828,13 +872,20 @@ export class RuntimeMigrator {
    * @warning Deletes all migration history - use only in development
    */
   async reset(pluginName: string): Promise<void> {
+    if (isMigrationsMetadataDisabled()) {
+      logger.warn('[RuntimeMigrator] Runtime migrations disabled; reset skipped');
+      return;
+    }
     logger.warn(`[RuntimeMigrator] Resetting migrations for ${pluginName}`);
 
-    await this.db.execute(
-      sql`DELETE FROM migrations._migrations WHERE plugin_name = ${pluginName}`
-    );
-    await this.db.execute(sql`DELETE FROM migrations._journal WHERE plugin_name = ${pluginName}`);
-    await this.db.execute(sql`DELETE FROM migrations._snapshots WHERE plugin_name = ${pluginName}`);
+    await ensureMigrationsNamespace(this.db);
+    const migrationsTable = migrationTableSQL('_migrations');
+    const journalTable = migrationTableSQL('_journal');
+    const snapshotsTable = migrationTableSQL('_snapshots');
+
+    await this.db.execute(sql`DELETE FROM ${migrationsTable} WHERE plugin_name = ${pluginName}`);
+    await this.db.execute(sql`DELETE FROM ${journalTable} WHERE plugin_name = ${pluginName}`);
+    await this.db.execute(sql`DELETE FROM ${snapshotsTable} WHERE plugin_name = ${pluginName}`);
 
     logger.warn(`[RuntimeMigrator] Reset complete for ${pluginName}`);
   }
@@ -846,6 +897,12 @@ export class RuntimeMigrator {
    * @returns Data loss analysis or null if no changes
    */
   async checkMigration(pluginName: string, schema: any): Promise<DataLossCheck | null> {
+    if (isMigrationsMetadataDisabled()) {
+      logger.info(
+        `[RuntimeMigrator] Skipping migration check for ${pluginName} because metadata storage is disabled`
+      );
+      return null;
+    }
     try {
       logger.info(`[RuntimeMigrator] Checking migration for ${pluginName}...`);
 

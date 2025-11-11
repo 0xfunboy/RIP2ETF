@@ -1,13 +1,23 @@
 import { sql } from 'drizzle-orm';
 import type { DrizzleDB, Journal, JournalEntry } from '../types';
+import {
+  ensureMigrationsNamespace,
+  isMigrationsMetadataDisabled,
+  migrationTableSQL,
+} from './migrations-namespace';
 
 export class JournalStorage {
   constructor(private db: DrizzleDB) {}
 
   async loadJournal(pluginName: string): Promise<Journal | null> {
+    if (isMigrationsMetadataDisabled()) {
+      return null;
+    }
+    await ensureMigrationsNamespace(this.db);
+    const table = migrationTableSQL('_journal');
     const result = await this.db.execute(
       sql`SELECT version, dialect, entries 
-          FROM migrations._journal 
+          FROM ${table} 
           WHERE plugin_name = ${pluginName}`
     );
 
@@ -24,8 +34,13 @@ export class JournalStorage {
   }
 
   async saveJournal(pluginName: string, journal: Journal): Promise<void> {
+    if (isMigrationsMetadataDisabled()) {
+      return;
+    }
+    await ensureMigrationsNamespace(this.db);
+    const table = migrationTableSQL('_journal');
     await this.db.execute(
-      sql`INSERT INTO migrations._journal (plugin_name, version, dialect, entries)
+      sql`INSERT INTO ${table} (plugin_name, version, dialect, entries)
           VALUES (${pluginName}, ${journal.version}, ${journal.dialect}, ${JSON.stringify(journal.entries)}::jsonb)
           ON CONFLICT (plugin_name) 
           DO UPDATE SET 
@@ -36,6 +51,9 @@ export class JournalStorage {
   }
 
   async addEntry(pluginName: string, entry: JournalEntry): Promise<void> {
+    if (isMigrationsMetadataDisabled()) {
+      return;
+    }
     // First, get the current journal
     let journal = await this.loadJournal(pluginName);
 
@@ -56,6 +74,9 @@ export class JournalStorage {
   }
 
   async getNextIdx(pluginName: string): Promise<number> {
+    if (isMigrationsMetadataDisabled()) {
+      return 0;
+    }
     const journal = await this.loadJournal(pluginName);
 
     if (!journal || journal.entries.length === 0) {
@@ -72,6 +93,9 @@ export class JournalStorage {
     tag: string,
     breakpoints: boolean = true
   ): Promise<void> {
+    if (isMigrationsMetadataDisabled()) {
+      return;
+    }
     const entry: JournalEntry = {
       idx,
       version: '7',
