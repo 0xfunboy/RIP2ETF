@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import type { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -24,8 +25,8 @@ export interface PingConfig {
 
 export interface ConnectionState {
   status: "connecting" | "connected" | "disconnected" | "failed";
-  pingInterval?: NodeJS.ReturnType<typeof setTimeout>;
-  reconnectTimeout?: NodeJS.ReturnType<typeof setTimeout>;
+  pingInterval?: ReturnType<typeof setTimeout>;
+  reconnectTimeout?: ReturnType<typeof setTimeout>;
   reconnectAttempts: number;
   lastConnected?: Date;
   lastError?: Error;
