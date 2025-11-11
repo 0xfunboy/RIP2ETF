@@ -4,14 +4,15 @@
   "module": "index.ts",
   "type": "module",
   "engines": {
-    "node": "23.3.0"
+    "node": ">=20.10.0"
   },
   "scripts": {
     "start": "turbo run start --filter=./packages/cli --log-prefix=none --no-cache",
     "start:debug": "cross-env NODE_NO_WARNINGS=1 LOG_LEVEL=debug elizaos start",
     "start:app": "turbo run start --filter=./packages/app",
     "dev": "turbo run dev",
-    "build": "turbo run build",
+    "prebuild:guard": "bash ./scripts/guard.sh",
+    "build": "pnpm run prebuild:guard && turbo run build",
     "build:client": "turbo run build --filter=@elizaos/client",
     "format": "turbo run format --filter=./packages/*",
     "format:check": "turbo run format:check --filter=./packages/*",

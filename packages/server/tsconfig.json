@@ -2,7 +2,11 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "composite": false,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@elizaos/*": ["../*/src/index.ts"]
+    }
   },
   "include": ["src/**/*.ts","src/**/*.tsx","index.ts","bin/**/*.ts","scripts/**/*.ts"],
   "exclude": ["node_modules","dist","build","**/*.test.ts","**/__tests__/**"]

@@ -522,11 +522,7 @@ class MockDatabaseAdapter extends DatabaseAdapter {
    * @param {string} params.tableName - The name of the table storing memories.
    * @returns {Promise<Memory[]>} - The Promise that resolves to an array of Memory objects.
    */
-  async getMemoriesByRoomIds(params: {
-    roomIds: `${string}-${string}-${string}-${string}-${string}`[];
-    agentId?: `${string}-${string}-${string}-${string}-${string}`;
-    tableName: string;
-  }): Promise<Memory[]> {
+  async getMemoriesByRoomIds(params: { roomIds: UUID[]; agentId?: UUID; tableName: string }): Promise<Memory[]> {
     return [
       {
         id: 'memory-id' as UUID,
@@ -588,7 +584,7 @@ class MockDatabaseAdapter extends DatabaseAdapter {
    */
   async searchMemories(params: {
     tableName: string;
-    roomId: `${string}-${string}-${string}-${string}-${string}`;
+    roomId: UUID;
     embedding: number[];
     match_threshold: number;
     count: number;
@@ -690,7 +686,7 @@ describe('DatabaseAdapter Tests', () => {
 
   it('should return memories by room ID', async () => {
     const memories = await adapter.getMemoriesByRoomIds({
-      roomIds: ['room-id' as `${string}-${string}-${string}-${string}-${string}`],
+      roomIds: ['room-id' as UUID],
       tableName: 'test_table',
     });
     expect(memories).toHaveLength(1);
@@ -713,7 +709,7 @@ describe('DatabaseAdapter Tests', () => {
   it('should search memories based on embedding', async () => {
     const memories = await adapter.searchMemories({
       tableName: 'test_table',
-      roomId: 'room-id' as `${string}-${string}-${string}-${string}-${string}`,
+      roomId: 'room-id' as UUID,
       embedding: [0.1, 0.2, 0.3],
       match_threshold: 0.5,
       count: 3,

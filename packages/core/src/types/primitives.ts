@@ -1,10 +1,8 @@
 import type { Buffer } from 'node:buffer';
+import type { UUID } from '@elizaos/types';
 import type { ChannelType } from './environment';
 
-/**
- * Defines a custom type UUID representing a universally unique identifier
- */
-export type UUID = `${string}-${string}-${string}-${string}-${string}`;
+export type { UUID, ServerId, EntityId } from '@elizaos/types';
 
 /**
  * Helper function to safely cast a string to strongly typed UUID

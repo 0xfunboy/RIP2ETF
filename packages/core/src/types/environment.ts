@@ -1,4 +1,4 @@
-import type { Metadata, UUID } from './primitives';
+import type { Metadata, UUID, ServerId } from './primitives';
 
 export interface Component {
   id: UUID;
@@ -49,14 +49,12 @@ export type World = {
   id: UUID;
   name?: string;
   agentId: UUID;
-  serverId: string;
+  serverId: ServerId;
   metadata?: {
     ownership?: {
-      ownerId: string;
+      ownerId: UUID;
     };
-    roles?: {
-      [entityId: UUID]: Role;
-    };
+    roles?: Record<UUID, Role>;
     [key: string]: unknown;
   };
 };

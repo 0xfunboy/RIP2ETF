@@ -1,3 +1,4 @@
+import type { UUID } from '@elizaos/types';
 import {
   type Action,
   type ActionExample,
@@ -10,7 +11,6 @@ import {
   ModelType,
   Role,
   type State,
-  type UUID,
   World,
   type ActionResult,
   parseKeyValueXml,

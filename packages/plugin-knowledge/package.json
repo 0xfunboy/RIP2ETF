@@ -31,6 +31,7 @@
     "@ai-sdk/google": "^2.0.14",
     "@ai-sdk/openai": "^2.0.32",
     "@elizaos/core": "workspace:*",
+    "@elizaos/types": "workspace:*",
     "@openrouter/ai-sdk-provider": "^1.2.0",
     "@tanstack/react-query": "^5.51.1",
     "ai": "^5.0.48",

@@ -1,4 +1,5 @@
-import type { IAgentRuntime, Route, UUID, Memory, KnowledgeItem } from '@elizaos/core';
+import type { UUID } from '@elizaos/types';
+import type { IAgentRuntime, Route, Memory, KnowledgeItem } from '@elizaos/core';
 import { MemoryType, createUniqueUuid, logger, ModelType } from '@elizaos/core';
 import { KnowledgeService } from './service';
 import fs from 'node:fs'; // For file operations in upload
@@ -438,8 +439,7 @@ async function deleteKnowledgeDocumentHandler(req: any, res: any, runtime: IAgen
   }
 
   try {
-    // Use type conversion with template string to ensure the typing is correct
-    const typedKnowledgeId = knowledgeId as `${string}-${string}-${string}-${string}-${string}`;
+    const typedKnowledgeId: UUID = knowledgeId;
     logger.debug(`[Document Processor] 🗑️ Deleting document: ${typedKnowledgeId}`);
 
     await service.deleteMemory(typedKnowledgeId);
@@ -484,8 +484,7 @@ async function getKnowledgeByIdHandler(req: any, res: any, runtime: IAgentRuntim
       count: 10000,
     });
 
-    // Use type conversion with template string to ensure the typing is correct
-    const typedKnowledgeId = knowledgeId as `${string}-${string}-${string}-${string}-${string}`;
+    const typedKnowledgeId: UUID = knowledgeId;
 
     // Find the document with the corresponding ID
     const document = memories.find((memory) => memory.id === typedKnowledgeId);

@@ -1,8 +1,9 @@
-import type { UUID, ChannelType } from '@elizaos/core';
+import type { ChannelType } from '@elizaos/core';
+import type { UUID, ServerId } from '@elizaos/types';
 import type { ServerMetadata, ChannelMetadata, MessageMetadata } from '@elizaos/api-client';
 
 export interface MessageServer {
-  id: UUID; // global serverId
+  id: ServerId; // global serverId
   name: string;
   sourceType: string; // e.g., 'eliza_native', 'discord_guild'
   sourceId?: string; // original platform ID if applicable
@@ -13,7 +14,7 @@ export interface MessageServer {
 
 export interface MessageChannel {
   id: UUID; // global channelId
-  messageServerId: UUID; // FK to MessageServer.id
+  messageServerId: ServerId; // FK to MessageServer.id
   name: string;
   type: ChannelType; // Use the enum from @elizaos/core
   sourceType?: string;
@@ -42,7 +43,7 @@ export interface CentralRootMessage {
 export interface MessageServiceStructure {
   id: UUID; // CentralRootMessage.id
   channel_id: UUID; // MessageChannel.id
-  server_id: UUID; // MessageServer.id
+  server_id: ServerId; // MessageServer.id
   author_id: UUID;
   author_display_name?: string;
   content: string;

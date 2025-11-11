@@ -3,13 +3,13 @@ import {
   DatabaseAdapter,
   type IAgentRuntime,
   logger,
-  type UUID,
   parseBooleanFromText,
   getDatabaseDir,
   getGeneratedDir,
   getUploadsAgentsDir,
   ElizaOS,
 } from '@elizaos/core';
+import type { UUID, ServerId } from '@elizaos/types';
 import cors from 'cors';
 import express, { Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
@@ -19,6 +19,7 @@ import http from 'node:http';
 import os from 'node:os';
 import net from 'node:net';
 import path, { basename, dirname, extname, join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { Server as SocketIOServer } from 'socket.io';
 import { createApiRouter, createPluginRouteHandler, setupSocketIO } from './api/index.js';
@@ -112,7 +113,7 @@ export function resolvePgliteDir(dir?: string, fallbackDir?: string): string {
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const DEFAULT_SERVER_ID = '00000000-0000-0000-0000-000000000000' as UUID; // Single default server
+const DEFAULT_SERVER_ID = '00000000-0000-0000-0000-000000000000' as ServerId; // Single default server
 
 /**
  * Represents a function that acts as a server middleware.
@@ -182,7 +183,7 @@ export class AgentServer {
 
   public database!: DatabaseAdapter;
   private rlsOwnerId?: UUID;
-  public serverId: UUID = DEFAULT_SERVER_ID;
+  public serverId: ServerId = DEFAULT_SERVER_ID;
 
   public loadCharacterTryPath!: (characterPath: string) => Promise<Character>;
   public jsonToCharacter!: (character: unknown) => Promise<Character>;
@@ -1030,12 +1031,11 @@ export class AgentServer {
               }
               // Also try npm root as fallback (some users might use npm)
               try {
-                const proc = Bun.spawnSync(['npm', 'root', '-g'], {
-                  stdout: 'pipe',
-                  stderr: 'pipe',
+                const proc = spawnSync('npm', ['root', '-g'], {
+                  encoding: 'utf-8',
                 });
-                if (proc.exitCode === 0 && proc.stdout) {
-                  const npmRoot = new TextDecoder().decode(proc.stdout).trim();
+                if (proc.status === 0 && proc.stdout) {
+                  const npmRoot = proc.stdout.trim();
                   const globalServerPath = path.join(npmRoot, '@elizaos/server/dist/client');
                   if (existsSync(path.join(globalServerPath, 'index.html'))) {
                     return globalServerPath;
@@ -1631,7 +1631,7 @@ export class AgentServer {
     return (this.database as any).getMessageServers();
   }
 
-  async getServerById(serverId: UUID): Promise<MessageServer | null> {
+  async getServerById(serverId: ServerId): Promise<MessageServer | null> {
     return (this.database as any).getMessageServerById(serverId);
   }
 
@@ -1652,7 +1652,7 @@ export class AgentServer {
     return (this.database as any).addChannelParticipants(channelId, userIds);
   }
 
-  async getChannelsForServer(serverId: UUID): Promise<MessageChannel[]> {
+  async getChannelsForServer(serverId: ServerId): Promise<MessageChannel[]> {
     return (this.database as any).getChannelsForServer(serverId);
   }
 
@@ -1766,7 +1766,7 @@ export class AgentServer {
    * @param {UUID} serverId - The server ID
    * @param {UUID} agentId - The agent ID to add
    */
-  async addAgentToServer(serverId: UUID, agentId: UUID): Promise<void> {
+  async addAgentToServer(serverId: ServerId, agentId: UUID): Promise<void> {
     // First, verify the server exists
     const server = await this.getServerById(serverId);
     if (!server) {
@@ -1781,7 +1781,7 @@ export class AgentServer {
    * @param {UUID} serverId - The server ID
    * @param {UUID} agentId - The agent ID to remove
    */
-  async removeAgentFromServer(serverId: UUID, agentId: UUID): Promise<void> {
+  async removeAgentFromServer(serverId: ServerId, agentId: UUID): Promise<void> {
     return (this.database as any).removeAgentFromServer(serverId, agentId);
   }
 
@@ -1790,23 +1790,23 @@ export class AgentServer {
    * @param {UUID} serverId - The server ID
    * @returns {Promise<UUID[]>} Array of agent IDs
    */
-  async getAgentsForServer(serverId: UUID): Promise<UUID[]> {
+  async getAgentsForServer(serverId: ServerId): Promise<UUID[]> {
     return (this.database as any).getAgentsForServer(serverId);
   }
 
   /**
    * Get all servers an agent belongs to
    * @param {UUID} agentId - The agent ID
-   * @returns {Promise<UUID[]>} Array of server IDs
+   * @returns {Promise<ServerId[]>} Array of server IDs
    */
-  async getServersForAgent(agentId: UUID): Promise<UUID[]> {
+  async getServersForAgent(agentId: UUID): Promise<ServerId[]> {
     // This method isn't directly supported in the adapter, so we need to implement it differently
     const servers = await (this.database as any).getMessageServers();
-    const serverIds = [];
+    const serverIds: ServerId[] = [];
     for (const server of servers) {
       const agents = await (this.database as any).getAgentsForServer(server.id);
       if (agents.includes(agentId)) {
-        serverIds.push(server.id as never);
+        serverIds.push(server.id as ServerId);
       }
     }
     return serverIds;
