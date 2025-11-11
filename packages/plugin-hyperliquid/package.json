@@ -1,0 +1,80 @@
+{
+  "name": "@elizaos/plugin-hyperliquid",
+  "version": "1.6.5-beta.1",
+  "description": "ElizaOS plugin for Hyperliquid DEX trading",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "type": "module",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "keywords": [
+    "elizaos",
+    "plugin",
+    "hyperliquid",
+    "dex",
+    "trading"
+  ],
+  "author": "ElizaOS Team",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "peerDependencies": {
+    "@elizaos/core": "*"
+  },
+  "dependencies": {
+    "hyperliquid": "^1.5.6",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@elizaos/core": "workspace:*",
+    "@types/bun": "latest",
+    "@types/node": "^20.0.0",
+    "bun": "^1.2.15",
+    "prettier": "^3.0.0",
+    "tsup": "^8.3.5",
+    "typescript": "^5.6.0"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "prettier --write ./src",
+    "clean": "rm -rf dist .turbo node_modules .turbo-tsconfig.json tsconfig.tsbuildinfo",
+    "format": "prettier --write ./src",
+    "format:check": "prettier --check ./src",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "test:coverage": "bun test --coverage"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/elizaos/eliza.git"
+  },
+  "agentConfig": {
+    "pluginType": "elizaos:plugin:1.0.0",
+    "pluginParameters": {
+      "HYPERLIQUID_PRIVATE_KEY": {
+        "type": "string",
+        "description": "Private key for interacting with Hyperliquid DEX",
+        "required": true,
+        "sensitive": true
+      },
+      "HYPERLIQUID_TESTNET": {
+        "type": "boolean",
+        "description": "Set to true for testnet, false for mainnet",
+        "required": false,
+        "default": false
+      }
+    }
+  }
+}

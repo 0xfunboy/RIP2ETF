@@ -1,0 +1,80 @@
+{
+  "name": "@elizaos/server",
+  "version": "1.6.5-beta.1",
+  "description": "ElizaOS Server - Core server infrastructure for ElizaOS agents",
+  "publishConfig": {
+    "access": "public",
+    "workspaces": {
+      "preserveIfPresent": true
+    }
+  },
+  "license": "MIT",
+  "author": {
+    "name": "elizaOS",
+    "url": "https://twitter.com/eliza_OS"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/elizaOS/eliza.git",
+    "directory": "packages/server"
+  },
+  "files": [
+    "dist",
+    "templates"
+  ],
+  "keywords": [],
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --dts --format esm,cjs",
+    "type-check": "tsc --project tsconfig.build.json --noEmit",
+    "lint": "prettier --write ./src",
+    "format": "prettier --write ./src",
+    "format:check": "prettier --check ./src",
+    "clean": "rm -rf dist .turbo node_modules .turbo-tsconfig.json *.tsbuildinfo",
+    "test": "bun test src/**/*.test.ts",
+    "test:unit": "bun test src/**/*.test.ts --exclude **/integration/**",
+    "test:integration": "bun test src/__tests__/integration/**/*.test.ts",
+    "test:coverage": "bun test --coverage",
+    "test:watch": "bun test --watch",
+    "test:cli": "bun test tests/commands/",
+    "dev": "tsup src/index.ts --watch"
+  },
+  "devDependencies": {
+    "@elizaos/client": "workspace:*",
+    "@types/cors": "^2.8.17",
+    "@types/node": "^24.0.1",
+    "prettier": "3.6.2",
+    "tsx": "4.20.6",
+    "typescript": "^5.5.4",
+    "which": "^5.0.0",
+    "ws": "^8.18.0",
+    "tsup": "^8.0.0"
+  },
+  "gitHead": "255e37c0e4a76da0b776219db5ebb9dadf20e89f",
+  "dependencies": {
+    "@elizaos/api-client": "workspace:*",
+    "@elizaos/core": "workspace:*",
+    "@elizaos/plugin-sql": "workspace:*",
+    "@sentry/node": "^10.16.0",
+    "@types/express": "^5.0.2",
+    "@types/helmet": "^4.0.0",
+    "@types/multer": "^2.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "drizzle-orm": "^0.44.2",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "helmet": "^8.1.0",
+    "multer": "^2.0.1",
+    "path-to-regexp": "^8.2.0",
+    "socket.io": "^4.8.1",
+    "uuid": "13.0.0"
+  },
+  "types": "dist/index.d.ts",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js"
+}

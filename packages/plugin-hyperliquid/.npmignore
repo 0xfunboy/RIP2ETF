@@ -1,0 +1,37 @@
+# Source files
+src/
+*.ts
+!dist/**/*.d.ts
+
+# Test files
+__tests__/
+*.test.ts
+*.spec.ts
+coverage/
+
+# Config files
+tsconfig.json
+tsup.config.ts
+.prettierrc
+.eslintrc*
+
+# Development files
+.env
+.env.*
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# CI/CD
+.github/
+
+# Documentation source
+docs/
+
+# Misc
+.DS_Store
+*.tmp
+bun.lockb
+node_modules/
