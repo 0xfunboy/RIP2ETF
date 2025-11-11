@@ -1,3 +1,4 @@
+type NodeTimer = ReturnType<typeof setTimeout>;
 /// <reference types="node" />
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
