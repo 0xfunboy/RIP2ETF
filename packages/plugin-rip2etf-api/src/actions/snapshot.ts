@@ -74,6 +74,37 @@ const hasHoldingsData = (holdings?: EtfHoldings | null) =>
 const hasHistoryData = (history?: PriceHistory | null) =>
   Boolean(history?.bars && history.bars.length > 0);
 
+function isAgentMessage(runtime: IAgentRuntime, message: Memory): boolean {
+  if (!message) return false;
+
+  const agentId = runtime.agentId;
+  if (agentId && message.entityId === agentId) {
+    return true;
+  }
+
+  const role = (message.content as any)?.role;
+  if (typeof role === "string" && role.toLowerCase() === "assistant") {
+    return true;
+  }
+
+  const author = (message.content as any)?.author;
+  if (author && typeof author === "object" && "id" in author && author.id === agentId) {
+    return true;
+  }
+
+  const sourceTag = message.metadata?.source;
+  if (sourceTag && sourceTag.startsWith("rip2etf.snapshot")) {
+    return true;
+  }
+
+  const tags = message.metadata?.tags;
+  if (Array.isArray(tags) && tags.some((tag) => typeof tag === "string" && tag.includes("agent"))) {
+    return true;
+  }
+
+  return false;
+}
+
 async function fetchSymbolDataset(symbol: string, corrId: string): Promise<SymbolDataset> {
   const [overviewPrimary, overviewExtra] = await Promise.all([
     fmpEtfProfile(symbol),
@@ -101,9 +132,9 @@ async function buildSnapshot(
   state: State | undefined,
   options: HandlerOptions | undefined,
   _callback: HandlerCallback | undefined,
-  responses: Memory[] | undefined
+  responses: Memory[] | undefined,
+  corrId: string
 ): Promise<ActionResult> {
-  const corrId = ensureCorrelationId(state, message);
   const collected = collectSymbols({ message, state, options, responses, limit: 6 });
   const candidates = Array.from(
     new Set(collected.map((symbol) => symbol.trim().toUpperCase()).filter(Boolean))
@@ -219,7 +250,9 @@ async function buildSnapshot(
   const chartAttachment: Media | undefined = chartResult
     ? {
         id: `rip2etf-chart-${primarySymbol}-${Date.now()}`,
-        url: chartResult.chartUrl,
+        url: chartResult.chartUrl?.startsWith("data:")
+          ? chartResult.fileName
+          : chartResult.chartUrl,
         data: chartResult.buffer,
         filename: chartResult.fileName,
         mimeType: chartResult.mimeType,
@@ -349,7 +382,12 @@ export const snapshotAction: Action = {
   description:
     "Sintesi completa di uno o più ETF con overview, holdings principali, confronto performance e grafico pronto da condividere.",
   similes: ["RIP2ETF_SNAPSHOT", "ETF_SNAPSHOT", "ETF_REPORT", "RIP2ETF_REPORT"],
-  validate: async (_runtime: IAgentRuntime, message: Memory) => {
+  validate: async (runtime: IAgentRuntime, message: Memory) => {
+    if (isAgentMessage(runtime, message)) {
+      debugLog("snapshot_skip_self_validate", message.id ?? "unknown");
+      return false;
+    }
+
     const tickers = collectSymbols({ message, limit: 1 });
     return tickers.length > 0;
   },
@@ -361,8 +399,45 @@ export const snapshotAction: Action = {
     callback?: HandlerCallback,
     responses?: Memory[]
   ) => {
+    state = state ?? ({ values: {}, data: {} } as State);
+    state.values = state.values || {};
+
+    if (isAgentMessage(runtime, message)) {
+      debugLog("snapshot_skip_self_handler", message.id ?? "unknown");
+      return {
+        success: false,
+        data: {
+          actionName: "rip2etf.snapshot",
+          error: "IGNORED_SELF_MESSAGE"
+        }
+      };
+    }
+
+    const corrId = ensureCorrelationId(state, message);
+    const cacheKey = `${message.roomId ?? "room"}:${corrId}`;
+    const cache =
+      (state.values.__snapshotCache as Record<string, ActionResult | undefined>) || {};
+
+    if (cache[cacheKey]) {
+      debugLog("snapshot_cache_hit", { corrId, cacheKey });
+      return cache[cacheKey]!;
+    }
+
     try {
-      return await buildSnapshot(runtime, message, state, options, callback, responses);
+      const result = await buildSnapshot(
+        runtime,
+        message,
+        state,
+        options,
+        callback,
+        responses,
+        corrId
+      );
+
+      cache[cacheKey] = result;
+      state.values.__snapshotCache = cache;
+
+      return result;
     } catch (error) {
       const reason =
         error instanceof Error ? error.message : "Errore inatteso durante la generazione snapshot";

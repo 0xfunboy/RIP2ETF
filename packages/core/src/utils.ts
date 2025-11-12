@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 import logger from './logger';
 import { getEnv } from './utils/environment';
-import type { Content, Entity, IAgentRuntime, Memory, State, TemplateType } from './types';
+import type { Content, Entity, IAgentRuntime, Media, Memory, State, TemplateType } from './types';
 import { ModelType, UUID, ContentType } from './types';
 
 // Text Utils
@@ -324,18 +324,43 @@ export const formatMessages = ({
 
       const attachments = (message.content as Content).attachments;
 
+      const sanitizeAttachmentValue = (value: string | undefined, maxLength = 256) => {
+        if (!value) return undefined;
+        if (value.trim().startsWith('data:')) {
+          return '[binary data omitted]';
+        }
+        const trimmed = value.trim();
+        return trimmed.length > maxLength ? `${trimmed.slice(0, maxLength)}…` : trimmed;
+      };
+
+      const formatAttachment = (media: Media) => {
+        const safeUrl = sanitizeAttachmentValue(media.url, 160);
+        const safeText = sanitizeAttachmentValue(media.text, 400);
+        const safeDescription = sanitizeAttachmentValue(media.description, 400);
+        const labelParts = [
+          media.id || 'attachment',
+          '-',
+          media.title || media.filename || media.mimeType || 'attachment',
+        ].filter(Boolean);
+        const header = `[${labelParts.join(' ')}${safeUrl ? ` (${safeUrl})` : ''}]`;
+        const lines = [header];
+        if (safeText) lines.push(`Text: ${safeText}`);
+        if (safeDescription) lines.push(`Description: ${safeDescription}`);
+        return lines.join('\n');
+      };
+
       const attachmentString =
         attachments && attachments.length > 0
           ? ` (Attachments: ${attachments
-              .map((media) => {
-                const lines = [`[${media.id} - ${media.title} (${media.url})]`];
-                if (media.text) lines.push(`Text: ${media.text}`);
-                if (media.description) lines.push(`Description: ${media.description}`);
-                return lines.join('\n');
-              })
+              .map((media: Media) => formatAttachment(media))
               .join(
-                // Use comma separator only if all attachments are single-line (no text/description)
-                attachments.every((media) => !media.text && !media.description) ? ', ' : '\n'
+                attachments.some(
+                  (media) =>
+                    sanitizeAttachmentValue(media.text, 1) ||
+                    sanitizeAttachmentValue(media.description, 1)
+                )
+                  ? '\n'
+                  : ', '
               )})`
           : null;
 

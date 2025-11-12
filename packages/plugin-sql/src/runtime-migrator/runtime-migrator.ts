@@ -27,13 +27,21 @@ export class RuntimeMigrator {
   private snapshotStorage: SnapshotStorage;
   private extensionManager: ExtensionManager;
   private introspector: DatabaseIntrospector;
+  private readonly isRealPostgresConnection: boolean;
 
   constructor(private db: DrizzleDB) {
     this.migrationTracker = new MigrationTracker(db);
     this.journalStorage = new JournalStorage(db);
     this.snapshotStorage = new SnapshotStorage(db);
     this.extensionManager = new ExtensionManager(db);
-    this.introspector = new DatabaseIntrospector(db);
+    const connectionUrl = process.env.POSTGRES_URL || process.env.DATABASE_URL || '';
+    this.isRealPostgresConnection = this.isRealPostgresDatabase(connectionUrl);
+    this.introspector = new DatabaseIntrospector(db, {
+      enableIntrospection: this.isRealPostgresConnection,
+      disableReason: this.isRealPostgresConnection
+        ? undefined
+        : 'Embedded database detected; skipping information_schema queries',
+    });
   }
 
   /**
@@ -477,17 +485,17 @@ export class RuntimeMigrator {
 
       // Ensure migration tables exist
       await this.initialize();
-      if (isMigrationsMetadataDisabled()) {
-        logger.info(
-          `[RuntimeMigrator] Skipping runtime migration for ${pluginName} because metadata storage is disabled for this dialect`
+
+      const metadataDisabled = isMigrationsMetadataDisabled();
+      if (metadataDisabled) {
+        logger.warn(
+          `[RuntimeMigrator] Continuing without runtime migration metadata for ${pluginName} (dialect limitations)`
         );
-        return;
       }
 
       // Only use advisory locks for real PostgreSQL databases
       // Skip for PGLite or development databases
-      const postgresUrl = process.env.POSTGRES_URL || process.env.DATABASE_URL || '';
-      const isRealPostgres = this.isRealPostgresDatabase(postgresUrl);
+      const isRealPostgres = this.isRealPostgresConnection;
 
       if (isRealPostgres) {
         try {
@@ -564,43 +572,52 @@ export class RuntimeMigrator {
       let previousSnapshot = await this.snapshotStorage.getLatestSnapshot(pluginName);
 
       // If no snapshot exists but tables exist in database, introspect them
-      if (!previousSnapshot && Object.keys(currentSnapshot.tables).length > 0) {
-        const hasExistingTables = await this.introspector.hasExistingTables(pluginName);
+      const needsBootstrapSnapshot =
+        !metadataDisabled && !previousSnapshot && Object.keys(currentSnapshot.tables).length > 0;
 
-        if (hasExistingTables) {
-          logger.info(
-            `[RuntimeMigrator] No snapshot found for ${pluginName} but tables exist in database. Introspecting...`
+      if (needsBootstrapSnapshot) {
+        if (!this.introspector.supportsIntrospection()) {
+          logger.debug(
+            `[RuntimeMigrator] Skipping existing table introspection for ${pluginName}; information_schema unavailable in this dialect`
           );
+        } else {
+          const hasExistingTables = await this.introspector.hasExistingTables(pluginName);
 
-          // Determine the schema name for introspection
-          const schemaName = this.getExpectedSchemaName(pluginName);
-
-          // Introspect the current database state
-          const introspectedSnapshot = await this.introspector.introspectSchema(schemaName);
-
-          // Only use the introspected snapshot if it has tables
-          if (Object.keys(introspectedSnapshot.tables).length > 0) {
-            // Save this as the initial snapshot (idx: 0)
-            await this.snapshotStorage.saveSnapshot(pluginName, 0, introspectedSnapshot);
-
-            // Update journal to record this initial state
-            await this.journalStorage.updateJournal(
-              pluginName,
-              0,
-              `introspected_${Date.now()}`,
-              true
-            );
-
-            // Record this as a migration
-            const introspectedHash = hashSnapshot(introspectedSnapshot);
-            await this.migrationTracker.recordMigration(pluginName, introspectedHash, Date.now());
-
+          if (hasExistingTables) {
             logger.info(
-              `[RuntimeMigrator] Created initial snapshot from existing database for ${pluginName}`
+              `[RuntimeMigrator] No snapshot found for ${pluginName} but tables exist in database. Introspecting...`
             );
 
-            // Set this as the previous snapshot for comparison
-            previousSnapshot = introspectedSnapshot;
+            // Determine the schema name for introspection
+            const schemaName = this.getExpectedSchemaName(pluginName);
+
+            // Introspect the current database state
+            const introspectedSnapshot = await this.introspector.introspectSchema(schemaName);
+
+            // Only use the introspected snapshot if it has tables
+            if (Object.keys(introspectedSnapshot.tables).length > 0) {
+              // Save this as the initial snapshot (idx: 0)
+              await this.snapshotStorage.saveSnapshot(pluginName, 0, introspectedSnapshot);
+
+              // Update journal to record this initial state
+              await this.journalStorage.updateJournal(
+                pluginName,
+                0,
+                `introspected_${Date.now()}`,
+                true
+              );
+
+              // Record this as a migration
+              const introspectedHash = hashSnapshot(introspectedSnapshot);
+              await this.migrationTracker.recordMigration(pluginName, introspectedHash, Date.now());
+
+              logger.info(
+                `[RuntimeMigrator] Created initial snapshot from existing database for ${pluginName}`
+              );
+
+              // Set this as the previous snapshot for comparison
+              previousSnapshot = introspectedSnapshot;
+            }
           }
         }
       }
@@ -731,8 +748,7 @@ export class RuntimeMigrator {
       throw error;
     } finally {
       // Always release the advisory lock if we acquired it (only for real PostgreSQL)
-      const postgresUrl = process.env.POSTGRES_URL || process.env.DATABASE_URL || '';
-      const isRealPostgres = this.isRealPostgresDatabase(postgresUrl);
+      const isRealPostgres = this.isRealPostgresConnection;
 
       if (lockAcquired && isRealPostgres) {
         try {

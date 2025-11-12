@@ -823,7 +823,11 @@ export const updateSettingsAction: Action = {
       const worldSettings = world?.metadata?.settings;
 
       if (!worldSettings) {
-        logger.error(`No settings state found for server ${world?.serverId}`);
+        if (world?.serverId) {
+          logger.warn(`No settings state found for server ${world.serverId}`);
+        } else {
+          logger.debug(`No world settings metadata available for user ${message.entityId}`);
+        }
         return false;
       }
 

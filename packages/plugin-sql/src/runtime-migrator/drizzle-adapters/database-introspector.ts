@@ -1,6 +1,12 @@
 import { sql } from 'drizzle-orm';
 import { logger } from '@elizaos/core';
 import type { DrizzleDB, SchemaSnapshot } from '../types';
+import { createEmptySnapshot } from './snapshot-generator';
+
+interface DatabaseIntrospectorOptions {
+  enableIntrospection?: boolean;
+  disableReason?: string;
+}
 
 /**
  * Introspect the current database state and generate a snapshot
@@ -8,7 +14,45 @@ import type { DrizzleDB, SchemaSnapshot } from '../types';
  * to capture the existing database state before migrations
  */
 export class DatabaseIntrospector {
-  constructor(private db: DrizzleDB) {}
+  private introspectionEnabled: boolean;
+  private disabledReason?: string;
+
+  constructor(private db: DrizzleDB, options: DatabaseIntrospectorOptions = {}) {
+    this.introspectionEnabled = options.enableIntrospection ?? true;
+
+    if (!this.introspectionEnabled) {
+      this.disabledReason =
+        options.disableReason ||
+        'Database does not expose PostgreSQL information_schema tables';
+      logger.info(
+        `[DatabaseIntrospector] Introspection disabled: ${this.disabledReason}`
+      );
+    }
+  }
+
+  supportsIntrospection(): boolean {
+    return this.introspectionEnabled;
+  }
+
+  private disableIntrospection(reason: string, error?: unknown): void {
+    if (!this.introspectionEnabled) {
+      if (!this.disabledReason) {
+        this.disabledReason = reason;
+      }
+      return;
+    }
+
+    this.introspectionEnabled = false;
+    this.disabledReason = reason;
+
+    logger.warn(
+      {
+        reason,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      '[DatabaseIntrospector] Disabling introspection; information_schema unavailable in this dialect'
+    );
+  }
 
   /**
    * Introspect all tables in the database and generate a snapshot
@@ -16,6 +60,13 @@ export class DatabaseIntrospector {
    * @returns Schema snapshot of current database state
    */
   async introspectSchema(schemaName: string = 'public'): Promise<SchemaSnapshot> {
+    if (!this.introspectionEnabled) {
+      logger.debug(
+        `[DatabaseIntrospector] Introspection requested for schema '${schemaName}', but introspection is disabled`
+      );
+      return createEmptySnapshot();
+    }
+
     logger.info(`[DatabaseIntrospector] Starting introspection for schema: ${schemaName}`);
 
     const tables: any = {};
@@ -422,18 +473,33 @@ export class DatabaseIntrospector {
    * @returns True if tables exist, false otherwise
    */
   async hasExistingTables(pluginName: string): Promise<boolean> {
+    if (!this.introspectionEnabled) {
+      logger.debug(
+        `[DatabaseIntrospector] Skipping hasExistingTables for ${pluginName}; introspection disabled`
+      );
+      return false;
+    }
+
     const schemaName =
       pluginName === '@elizaos/plugin-sql' ? 'public' : this.deriveSchemaName(pluginName);
 
-    const result = await this.db.execute(
-      sql`SELECT COUNT(*) AS count
-          FROM information_schema.tables
-          WHERE table_schema = ${schemaName}
-            AND table_type = 'BASE TABLE'`
-    );
+    try {
+      const result = await this.db.execute(
+        sql`SELECT COUNT(*) AS count
+            FROM information_schema.tables
+            WHERE table_schema = ${schemaName}
+              AND table_type = 'BASE TABLE'`
+      );
 
-    const count = parseInt((result.rows[0]?.count as string) || '0', 10);
-    return count > 0;
+      const count = parseInt((result.rows[0]?.count as string) || '0', 10);
+      return count > 0;
+    } catch (error) {
+      this.disableIntrospection(
+        `information_schema not available for schema ${schemaName}`,
+        error
+      );
+      return false;
+    }
   }
 
   /**

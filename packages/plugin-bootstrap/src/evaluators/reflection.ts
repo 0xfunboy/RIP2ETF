@@ -114,6 +114,13 @@ Generate a response in the following format:
 
 IMPORTANT: Your response must ONLY contain the <response></response> XML block above. Do not include any text, thinking, or reasoning before or after this XML block. Start your response immediately with <response> and end with </response>.`;
 
+const REFLECTION_DISABLED =
+  process.env.RIP2ETF_DISABLE_REFLECTION === 'true' ||
+  process.env.DISABLE_REFLECTION_EVALUATOR === 'true';
+const MAX_REFLECTION_RECENT_CHARS = Number(process.env.REFLECTION_RECENT_CHAR_LIMIT ?? 2000);
+const MAX_REFLECTION_PROVIDER_CHARS = Number(process.env.REFLECTION_PROVIDER_CHAR_LIMIT ?? 1800);
+const MAX_REFLECTION_FACTS_CHARS = Number(process.env.REFLECTION_KNOWN_FACTS_CHAR_LIMIT ?? 1400);
+
 /**
  * Resolve an entity name to their UUID
  * @param name - Name to resolve
@@ -166,6 +173,16 @@ async function handler(runtime: IAgentRuntime, message: Memory, state?: State) {
     return;
   }
 
+  if (REFLECTION_DISABLED) {
+    logger.debug('Reflection handler disabled via environment flag');
+    return;
+  }
+
+  if (message.entityId === agentId) {
+    logger.debug('Skipping reflection for agent-authored message');
+    return;
+  }
+
   // Run all queries in parallel
   const [existingRelationships, entities, knownFacts] = await Promise.all([
     runtime.getRelationships({
@@ -180,10 +197,13 @@ async function handler(runtime: IAgentRuntime, message: Memory, state?: State) {
     }),
   ]);
 
+  const sanitizedValues = sanitizeStateValues(state?.values);
+  const trimmedKnownFacts = sanitizeTextBlock(formatFacts(knownFacts), MAX_REFLECTION_FACTS_CHARS);
+
   const prompt = composePrompt({
     state: {
-      ...(state?.values || {}),
-      knownFacts: formatFacts(knownFacts),
+      ...sanitizedValues,
+      knownFacts: trimmedKnownFacts,
       roomType: message.content.channelType as string,
       entitiesInRoom: JSON.stringify(entities),
       existingRelationships: JSON.stringify(existingRelationships),
@@ -340,6 +360,14 @@ export const reflectionEvaluator: Evaluator = {
   name: 'REFLECTION',
   similes: ['REFLECT', 'SELF_REFLECT', 'EVALUATE_INTERACTION', 'ASSESS_SITUATION'],
   validate: async (runtime: IAgentRuntime, message: Memory): Promise<boolean> => {
+    if (REFLECTION_DISABLED) {
+      return false;
+    }
+
+    if (message.entityId === runtime.agentId) {
+      return false;
+    }
+
     const lastMessageId = await runtime.getCache<string>(
       `${message.roomId}-reflection-last-processed`
     );
@@ -535,4 +563,40 @@ function formatFacts(facts: Memory[]) {
     .reverse()
     .map((fact: Memory) => fact.content.text)
     .join('\n');
+}
+
+function sanitizeStateValues(values?: State['values']): Record<string, unknown> {
+  const clone: Record<string, unknown> = { ...(values || {}) };
+  for (const key of Object.keys(clone)) {
+    const value = clone[key];
+    if (typeof value !== 'string') continue;
+    const lowerKey = key.toLowerCase();
+    if (
+      lowerKey.includes('recent') ||
+      lowerKey.includes('history') ||
+      lowerKey.includes('provider') ||
+      lowerKey.includes('snapshot')
+    ) {
+      const limit = lowerKey.includes('provider') || lowerKey.includes('snapshot')
+        ? MAX_REFLECTION_PROVIDER_CHARS
+        : MAX_REFLECTION_RECENT_CHARS;
+      clone[key] = sanitizeTextBlock(value, limit);
+    }
+  }
+  return clone;
+}
+
+function sanitizeTextBlock(text: string | undefined, limit: number): string {
+  if (!text) return '';
+  let sanitized = text
+    .replace(/data:[^,\s]+;base64,[A-Za-z0-9+/=]+/gi, '[media omitted]')
+    .replace(/\bhttps?:\/\/\S+/gi, (url) => (url.length > 80 ? `${url.slice(0, 77)}…` : url));
+
+  sanitized = sanitized.trim();
+
+  if (limit > 0 && sanitized.length > limit) {
+    sanitized = sanitized.slice(-limit);
+  }
+
+  return sanitized;
 }

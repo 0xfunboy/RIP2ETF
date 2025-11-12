@@ -29,7 +29,7 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsup --config tsup.config.ts",
+    "build": "tsup --config tsup.config.ts && node ./scripts/copy-client-dist.mjs",
     "type-check": "tsc --project tsconfig.build.json --noEmit",
     "lint": "prettier --write ./src",
     "format": "prettier --write ./src",
