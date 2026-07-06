@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=160&section=header&text=RIP2ETF&fontSize=60&fontColor=fff&animation=fadeIn&fontAlignY=38&desc=An%20ElizaOS-based%20chat%20agent%20that%20generates%20ETF%20comparison%20snapshots%20with%20ch...&descAlignY=60&descSize=14" width="100%"/>
+<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=160&section=header&text=RIP2ETF&fontSize=60&fontColor=fff&animation=fadeIn&fontAlignY=38&desc=An%20ElizaOS-based%20chat%20agent%20that%20generates%20ETF%20comparison%20snapshots%20with...&descAlignY=60&descSize=14" width="100%"/>
 
 <img src="https://skillicons.dev/icons?i=ts,js,bash,html,css,nodejs,discord&theme=dark" alt="Tech stack"/>
 
