@@ -153,4 +153,4 @@ Issues and feature requests are welcome—file them on GitHub and tag them with 
 
 ## License
 
-AIROS is released under the [MIT License](./LICENSE).
+The earlier MIT notice is preserved in [LICENSES/PRIOR-MIT.txt](LICENSES/PRIOR-MIT.txt), and embedded ElizaOS packages retain their MIT terms. See [LICENSING.md](LICENSING.md) for eligible original 0xfunboy material.
